@@ -1,0 +1,77 @@
+# .reviewboardrc, A local configuration file for ReviewBoard
+#
+# If you'll always use the same P4 depots and reviewboard servers,
+# you can place this in your home directory as .reviewboardrc
+# Or, if needed, place unique instances in the roots of your p4 workspaces.
+#
+# Note, this is parsed as a python script, so use "b = c", NOT "b=c"
+# and all the other Pythonic whitespacery :(
+
+# At a minimum, in your own instance you'll want to change the values for:
+#   TARGET_PEOPLE and P4_CLIENT,
+# and may also need to adjust various login settings depending upon whether
+# you have setup P4 environment vars already.
+#   TARGET_GROUPS may be useful instead of TARGET_PEOPLE, but depends on the
+#  reviewboard server being configured with correct groups.
+
+# BUG! post-review "prefers" git over P4, and it identifies git usage by
+# checking for a .git folder in the root of your workspace. If you use
+# git locally in your workflow, post-review against a P4 depot WILL FAIL,
+# unless you rename or otherwise hide your .git folder, e.g. to "dotgit",
+# when submitting to ReviewBoard. I (tarynv) have searched for a way to
+# make reviewboard ignore the .git folder and just use P4. Short of hacking
+# the python code, there doesn't seem to be a way.
+
+# Load environment vars for os.environ references.
+import os
+
+# ------ Reviewboard configuration ------
+# URL for the reviewboard server
+REVIEWBOARD_URL = ...[redacted internal link]...
+# Reviewboard's internal friendly name for the P4 depot
+REPOSITORY = "devsrc-2666"
+# Publish changes in reviewboard automatically when running post-review
+PUBLISH = "1"
+# Open your newly published changes in a browser automatically when posting.
+OPEN_BROWSER = "1"
+# Name your usual reviewers, they'll get email.
+TARGET_PEOPLE = "tarynv,leel,justinb,tejas"
+
+# ------ Reviewboard login ------
+# IF reviewboard login == P4 login
+# AND you have P4 environment vars set
+USERNAME = os.environ['P4USER']
+PASSWORD = os.environ['P4PASSWD']
+
+# else use:
+# USERNAME = "RBname"
+# PASSWORD = "RBpass"
+
+
+# ----- P4 login (used by post-review to reach p4) -----
+# IF you have P4 environment vars set
+P4_PORT = os.environ['P4PORT']
+P4_USER = os.environ['P4USER']
+P4_PASSWD = os.environ['P4PASSWD']
+
+# Else just set the p4 login stuff directly
+#P4_PORT = ...[redacted internal link]...
+#P4_USER = "myp4name"
+#P4_PASSWD = "myp4passwd"
+
+# Workspace name, AKA client name
+P4_CLIENT = "tarynv_iOS_Main_MAM"
+
+# ----- Other Reviewboard settings, only for completeness ----
+#TARGET_GROUPS = ""
+#ENABLE_PROXY = ""
+#GUESS_FIELDS = ""
+#GUESS_SUMMARY = ""
+#GUESS_DESCRIPTION = ""
+#BRANCH = ""
+#SUBMIT_AS = ""
+#PARENT_BRANCH = ""
+#TRACKING_BRANCH = ""
+#DEBUG = ""
+#HTTP_USERNAME = ""
+#HTTP_PASSWORD = ""

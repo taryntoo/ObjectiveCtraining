@@ -1,0 +1,150 @@
+VirtualChannels.txt an VC implementation for iOS,   tarynv Aug 2012
+
+Executive summary:
+DuncanB's VC objects are being ported to iOS, replacing the existing snarl of VC handlers.
+
+Justification:
+Reading the existing endlessly replicated VC code is justification enough.
+
+Reference:
+  ...[redacted internal links]...
+
+
+Relevant/Changed Files:
+
+ClientFeatures.h 
+#defined AX_VC
+
+engload.c 
+  NCSbind_start() calls  VCControllerLoad()
+
+virtual.c
+  VirtualWrite() calls  VCControllerProcessPacket()
+
+wdinit.c
+  Swap in (and patch memory calls of) SendAllInitResponse() to call
+    VCControllerNumberOfVirtualChannels()
+    VCControllerNextVirtualChannelId()
+    VCControllerCopyInfoData()
+    VCControllerReleaseInfoData()
+    VCControllerPutInfoDataInBuffer()
+    
+basetype.h:  BOOL, IBOOL fixed in by adding #ifndef __OBJC__
+
+
+Files visited/changed or to revisit:
+
+AXClient/Shared/Configuration/ ----
+    ClientDriveConfiguration.h              Conflicts with ios CDM?
+    ClientDriveConfiguration.m (ARC issue) 
+    ClientDriveConfigurationProtocol.h
+
+    ICAConfiguration.h
+    Configuration.m            (ARC issue)
+    ConfigurationIni.h
+    ConfigurationProtocol.h
+
+AXClient/Stubs/ -----
+    ModuleInitResponse.h
+    ModuleInitResponse.m     (ARC issue)
+    WinstationDriver.h
+    WinstationDriver.m     (ARC issue)  where's VdCallWdDirect()?
+    TempWDHeaders.h
+
+AXClient/VirtualChannels/Classes/ -----
+    Packet.h
+    Packet.m     (ARC issue)
+    Queue.h   rewritten to replace NSPointer type (N/A in iOS)
+    Queue.m  (ARC issue)
+    Types.h
+    
+    VirtualChannelController.h
+    VirtualChannelController.m  (ARC issue)
+    VirtualChannelControllerProtocol:  edits for menu types
+    VirtualChannelFlow.h
+    VirtualChannelFlow.m     (ARC issue)
+
+    VirtualChannelInitResponse.h
+    VirtualChannelInitResponse.m     (ARC issue)
+    VirtualChannelProtocol.h
+    VirtualChannelProtocol.m
+
+    VirtualChannelQueue.h
+    VirtualChannelQueue.m       (ARC issue)
+    VirtualChannelQueueProtocol.h
+
+    VirtualChannelSecurity.h
+    VirtualChannelSecurityController.h
+    VirtualChannelSecurityController.m //too snarled in UI
+
+
+AXClient/VirtualChannels/SDK/ -----
+    VirtualChannelSDK.h
+
+P4 changelists 215615(mac)  215438(iOS)
+Porting AX VCs to iOS and backporting cross-platform sources to Mac Client.
+Fix platform conflicts between iOS and and OSX targets.
+Removes needless dependencies on Cocoa.h for many files, substituting Foundation.h.
+For files that actually need Appkit for UI dependencies guard with XCODE_SDK_UIKIT tests.
+Replace Windowisms in a few files as needed to compile in iOS, e.g. PVOID becomes void*.
+Rewrite Queue to eliminate an OSX-only dependency  (NSPointerArray not available in iOS)
+Removed some #includes and #imports that seemed to be obsolete.
+Correct target of libzip to 4.2
+Fix more issues with BOOL, IBOOL, etc.
+Fix a few absurd circular dependencies in speex and vorbis libs.
+Add VdCallWdDirect() to vdapie.c
+This is pass one, which hooks VirtualChannelSDK and supporting files to iOS  streams.
+
+
+Still relevant?
+    Message.h
+    MacAXCocoaCategories.h
+    MacAXCocoaCategories.m
+    MacintoshHeaders.h  (toss?)
+
+
+Candidates for removal/replacement:
+    Engine/base/PlatformIndependent/vd/vdtwi/macosx/* // obviously NOT platform independent
+    Engine/macCommon/src/host_vcsdk/*  // obsolete or abandoned?
+
+
+// Boilerplate
+
+#if XCodeDidntHavePrecompiledHeadersWeWouldHaveTo
+#endif // change this for iOS AX_VC, but neither needs it.
+
+#if iOShasMenusAndWindowsPigsWillFly
+#endif // iOShasMenusAndWindowsPigsWillFly
+
+// AX_VC tvw revisit  
+
+#if  DumpAllAuthorizationChatterToLogs
+#endif // DumpAllAuthorizationChatterToLogs
+
+
+I would have preferred to use XCODE_SDK_COCOA and positive logic for these, 
+but much of the mac client source still defines XCODE_SDK_CARBON,
+so testing for !XCODE_SDK_UIKIT is the only sturdy way to exclude appkit stuff.
+
+#if !XCODE_SDK_UIKIT   // AX_VC tvw revisit
+#import <Cocoa/Cocoa.h>  // only if needed for appkit
+#endif // !XCODE_SDK_UIKIT
+
+Cocoa:
+#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
+#import <CoreData/CoreData.h>
+
+
+#if XCODE_SDK_UIKIT     // AX_VC tvw revisit 
+#else  // ! XCODE_SDK_UIKIT
+#endif // XCODE_SDK_UIKIT
+
+#if AX_VC
+#endif // AX_VC
+
+
+SHOW("%s is deprecated; put a breakpoint in it to identify and update callers\n", __func__);
+
+ CAUTION! this file is included in other files!
+

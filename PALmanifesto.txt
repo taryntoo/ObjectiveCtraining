@@ -1,0 +1,25 @@
+The PAL Manifesto,   tarynv 1/12/2012  (Work completed, Feb, 2012)
+
+Executive summary:
+All Pal_<mumble> dependencies have been entirely stripped from the iOS client. They add nothing, though increasing code size and complexity, decreasing speed, readability, optimizability, and debug-ability.
+(PAL = 'Platform Abstraction Library' or perhaps 'Portable Abstraction Library')
+
+Justification:
+The stuff was a pointless effort to make iOS act like Windows, by creating a 'PAL' that was nothing of the sort.
+
+Impact:
+What little Pal_<mumble> functionality was actually implemented has only been used by a single feature, a trace library, it has been modified to simply contain the few scraps of PALery it required.
+
+In the longer term, the dozen variants of critical sections, threading, semaphores and similar misery stuffed into the iOS client are being normalized, replaced with libdispatch, (aka Grand Central Dispatch) and pthreads. See ThreadingManifesto.m for working notes and details of this work.
+
+Relevant Files:
+  All of PAL source has been removed from both project and source tree.
+
+Misc boilerplate for first passes:
+
+SHOW("%s is deprecated; put a breakpoint in it to identify and update callers\n", __func__);
+
+CAUTION! this file is included in other files.
+
+#if UseDeprecatedAndMostlyUnimplementedWinPAL
+#endif // UseDeprecatedAndMostlyUnimplementedWinPAL

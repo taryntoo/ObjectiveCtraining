@@ -32,6 +32,7 @@
     calloc(size_t count, size_t size);
     realloc(void* original, size_t newsize);
     free(void* mem);
+  For debug purposes the host_<mumble>() allocation variants may be used, and left in place, since they implement guard code only in debug builds.
 */
 
 
@@ -66,7 +67,8 @@
 #endif	/* _LOGMAP_H */
 /* ObjC headers by tradition do not, and you MUST use #import for them.
  Because #import allows the compiler to not reopen and scan the header, there will be a slight
- improvement in build times. There is no downside to using #import for almost all headers, and 
+ improvement in build times, and no "<mumble> redefined" errors.
+ There is no downside to using #import for almost all headers, and
  the include guard cruft isn't needed.
  
  Exception: Some optimally obfuscated work uses stupid code tricks like redefining a macro
@@ -102,7 +104,6 @@
 
 
 /* TODO: Prefer clarity over portability.
-
     Accept that portability is an ideal, but generally a useless fiction. Use
     the platform capabilities to simplify and optimize. Strip away useless indirection.
  */
@@ -136,14 +137,13 @@
          "Cocoa and Objective-C: Up and Running", Scott Stevenson
          "The Objective-C 2.0 Programming Language", Apple
          http://www.lysator.liu.se/c/ten-commandments.html#henry 
-         
 
     Alternatives: 
         Those found trying to slip in any Whitesmiths, GNU, Banner, Horstmann, et al,
         will be flogged, placed in the corner, and we will all point and laugh.
         Lisp style users will be forced to parse code that has been stripped of newlines.
-
  */
+
 
 /* TODO: Source code is not a collection of powerpoint slides, it is a technical document.
     a: No Bullets! 
@@ -537,8 +537,6 @@ void ContextSetDateTime( USHORT FileId, USHORT usDate, USHORT usTime)
    static char* mainThreadName = "ReceiverMainThread\0"; /* TVW: I forget this all the time :( 
                                                           
  Class instances are always calloced, only non-zero members require further initialization
-
-                                                          
  */
 
 
@@ -576,7 +574,6 @@ void ContextSetDateTime( USHORT FileId, USHORT usDate, USHORT usTime)
  Make the word before the argument describe the argument.
  
  Also see property attributes, below.
- 
  */
 
 
@@ -594,7 +591,7 @@ void ContextSetDateTime( USHORT FileId, USHORT usDate, USHORT usTime)
  */
 dispatch_queue_t GetEngineMessage_dispatch_queue(void)
 {
-    static const char* EngineMessage_queue_name = "com.citrix.receiver.EngineMessage_dispatch_queue";
+    static const char* EngineMessage_queue_name = "[prop].EngineMessage_dispatch_queue";
 
     static dispatch_queue_t EngineMessage_dispatch_queue = nil; // Set nil by compiler once.
     static dispatch_once_t tolkien;                                 // A magic one-shot mutex
@@ -620,7 +617,7 @@ dispatch_queue_t GetEngineMessage_dispatch_queue(void)
  Apple system guidelines (and objC's flat namespace) require that things like 
  bundle IDs, queue names, thread names, libraries, and device drivers have unique names.
  
- Always use names like "com.citrix.<lib-or-app-name>.thingname"; define those names
+ Always use names like "com.prop.<lib-or-app-name>.thingname"; define those names
  in approriate scope, and NEVER use string literals to refer to them.
  Also see "No Magic Numbers or Strings", above"
 */
@@ -640,7 +637,7 @@ dispatch_queue_t GetEngineMessage_dispatch_queue(void)
  
  */ 
 
-/* TODO: write notes consider ivars vs properties, public vs private
+/* TODO: add notes on ivars vs properties, public vs private
  
  class extensions.
  brackets not dots.
@@ -695,9 +692,6 @@ dispatch_queue_t GetEngineMessage_dispatch_queue(void)
  is declared. The methods declared in the adopted protocol are not declared elsewhere in 
  the class or category interface.
  
- It’s possible for a class to simply adopt protocols and declare no other methods. 
- For example, the following class declaration adopts the Formatting and Prettifying 
- protocols, but declares no instance variables or methods of its own:
-
+ It’s possible for a class to simply adopt protocols and declare no other methods.
  */
 

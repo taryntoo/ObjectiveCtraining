@@ -1,0 +1,418 @@
+Cleanup Candidates.txt
+iOS Receiver Work Items and Files for potential discard,   tarynv 04/2012
+
+The display problem:
+Mostly in ga_macapi.c, I think it boils down to a failure to retain and access the backbuffer's _GDC (see GA_TYPES.H) as needed to update small rects, then re-render them to the sessionview. 
+
+basically, every small rect update to the backbuffer  needs to be queued as a small update to sessionview, instead of forcing sessionview redraws.
+GA_MacAPI_FlushChanges()
+
+theMacGDC->theBitMap
+
+
+from roger:
+
+First off, a note on drawRectsToWindow.  We avoid the costliest operations in this method because, frankly, we short-circuit out before they can occur.  Specifically, the ImageForBitmap and DrawImageIntoContext calls won't happen because we hit Mac_ForceWindowContentsRedraw and then return.
+
+Which leads me to dig into Mac_ForceWindowContentsRedraw.  This gets us to []SessionInputView:redrawScreen:, partially given here:
+
+- (void)redrawScreen:(CGImageRef)theImage 
+{
+    if (theImage==NULL) {
+         __block PBitmapData pBitmapD = NULL;
+
+#if     USE_LIBDISPATCH
+        // sending task off to the GDC handler queue, waiting for return.
+        dispatch_sync(GA_GetScreenGCD_dispatch_queue(), ^{
+           pBitmapD = GA_MacAPI_CreateBitMapDataFromSessionBackBuffer();
+            if (pBitmapD) {
+                [self updateTextureBitmap:pBitmapD];
+                if (self.isDraggingMagnificationLoop) {
+                    [self updateMagnificationLoopCenterPoint:self.mousePointerView.center];
+                }
+                free(pBitmapD);
+            }
+        });
+#else
+ ...
+#endif  // USE_LIBDISPATCH
+    }
+}   // ends redrawScreen:
+
+
+The interesting thing is that we always incur the cost of GA_MacAPI_CreateBitMapDataFromSessionBackBuffer in the block.  But do we need it?
+
+Looking at ICASessionEAGLView:updateTextureBitmap:, we get a clue for an optimization:
+- (void)updateTextureBitmap: (PBitmapData) bitmap
+{
+    if (bitmap==nil) return;
+    
+    if ([self useOpenGL])
+    {
+        updateTextureBitmap(bitmap);
+        [self drawView];
+    }
+    else
+    {
+        [self setNeedsDisplay];
+    }
+}
+
+See it?  If we're not in "useOpenGL" mode, we don't use the bitmap.  Which means that for depths other than 24 and 32, the work performed by 
+GA_MacAPI_CreateBitMapDataFromSessionBackBuffer was a waste of time.
+
+So the optimization would be in ICASessionInputView:redrawScreen:.  Basically, we should look to see if we're in "useOpenGL" mode.  If we are, go ahead and call GA_MacAPI_CreateBitMapDataFromSessionBackBuffer, etc etc.  But if we're not, then it should be sufficient to just call [self setNeedsDisplay].
+
+The impact is that we would avoid the costly processing associated with each short-circuited call to drawRectsToWindow, and basically kick the actually drawing downstream to normal "drawRect:" time courtesy of setNeedsDisplay.
+
+Yes, there is the edge case that []SessionEAGLView:updateTextureBitmap: is sensitive to bitmap==nil.  But I don't think that my proposed change would suffer from that, as it is safe to call [self setNeedsDisplay] regardless of the actual availability of the bitmap returned by GA_MacAPI_CreateBitMapDataFromSessionBackBuffer.
+
+------ Poorly Pirated and/or Warning Loaded files ------
+
+TCPServer.m
+HTTPServer.m
+EmbeddedHTTPService.m
+MobileAppResource.m
+
+------ Pointless complexity, guidelines  ------
+
+ZipArchive.mm
+
+codec.cpp
+codec.cpp
+ctxspeex.cpp
+ctxvorbis.cpp
+modmgr.cpp
+OggStreamDecoder.cpp
+OggStreamEncoder.cpp
+SpeexDecoder.cpp
+SpeexEncoder.cpp
+sspicl.cpp
+TUICITransformSI.cpp
+tuivc.cpp
+vdcam.cpp
+vdtuie.cpp
+VorbisDecoder.cpp
+VorbisEncoder.cpp
+
+------ Duplicate Code, Broken Code -------
+
+Clean up one of the handful of logging and tracing modules already in
+   the iOS client, use it for Cdf_Assertions, and toss the rest of them.
+   Logging code MUST only use async blocks on a low priority dispatch queue!
+
+
+------ Problematic, buggy, or ill-designed infrastructure, features and functions -------
+
+  Project files and schemes:
+  Project libs and dependencies:
+    Are so huge and complex that P4 regularly chokes trying to resolve changes.
+    Identify and remove obsolete targets and schemes, normalize build settings, and
+    correct lib dependencies.
+  
+  Threading and mutexes: 
+  Run Loops:
+  Polling:
+  Notifications:
+    Currently a huge snarl of decades of competing techniques;
+    repairs are underway. See ThreadingManifesto.m and check with Taryn.
+    Prefer KVO over notifications.
+    Prefer Serial Queues to KVO or Notifications, in cases of single observer.
+    Need thread local storage? use NSThreads.
+                
+  GDC models:
+    As part of threading and mutex work, document best practices to move toward GDC.
+
+  Virtual Channel APIs: Existing implementations are a terrible fit for iOS, 
+    larded up with duplicate code, and unmaintainable. AX_VC is pending rewrite, 
+    based on DuncanB's Mac_AX VC implementation. See AX_VirtualChannels.txt.
+        
+  Keyboard and mouse performance:
+    EngineKbmInterfaceImpl: Overly complex, leaks like a sieve, and eats cycles.
+    (Taryn fixed, by removing entirely :) 
+    (Display rendering delays while typing still plague the iPad3) 
+    
+  Zero latency:
+    May be broken or disabled, we need a work item and/or defect to chase that down.
+    
+  Session Keepalive and/or auto-reconnect:
+    There are several generations of these in the hosts and gateways. We need a dialog with
+    [desktop] and Gateway mavens to establish best practice, and favored designs.
+    Per Georgy, 3/27 Session reliability is favored, auto-reconnect deprecated.
+        
+  Network Indicator:
+    Work item to determine a reliable metric and add a UI to report it. 
+
+  Structured Exceptions:
+  Testing error returns:
+    Normalize handling of errors and failures. 
+
+  Code Quality as a feature:
+    Cleanup to conform to standards. Identify and correct (not mask!) warnings.
+    Replace magic numbers and strings with const enumerations and const string vars.
+    Remove absurd and non-standard primitive types and pointless, misleading abstractions.
+    Remove Windowisms, enforce usage of C99, ObjC, and POSIX standard types.
+  
+  Documented and enforced APIs:
+  Simple and direct dispatch mechanisms:
+    The well-conceived but frequently abused effort from the early 00's to create platform
+    independent codebases with clean APIs has been a failure, partly because it 
+    was immediately filled with Windowisms, but there's plenty of blame for Unix, 
+    Mac and iOS teams to share. 
+    Left in its wake is an incredibly complex mess of indirection, note the deep snarl
+    of calls in the stack trace below, about half of those functions do nothing but jump
+    through a table to call a function that jumps through a table.
+  
+  Unit testing as a feature:
+    OCUnit – Target all new Feature Teams.
+
+  Performance as a feature:
+  Architecture as a feature:
+    A superset of the above requirements, a placeholder for work on product infrastructure,
+    instead of new features. 
+
+  Core data as persistence model in RDBMS:
+  Settings, Configurations, Profiles, [custom] files:
+    There are dozens, perhaps several hundreds of runtime and 
+    session time settings in use. They are accessed from a motley collection of
+    files, defined strings, and plists, using many variants modeled on Windows'
+    .ini file sections, key-value pairs, and typed accessors.
+    This would be a non-issue, except that there tend to be multiple instances of the data, 
+    and the data is looked up and copied repeatedly. 
+    While we probably want to retain support for the .ini and .[prop] external file formats,
+    and the accessor APIs, all of this needs to be turned into a dictionary of dictionaries,
+    or perhaps a single dictionary or coredata object whose keys are filename+sectionname+key.
+    Even if we do continue to support the old ini and [prop] file formats, it should be in a
+    persistent manner, so they only have to be re-parsed at run or session start if they
+    are identified as having been changed since they were last parsed.
+      config.h 
+      getprofile.c  // GetPrivateProfile...()
+      miapi.h      //   miGetPrivateProfile...(), etc. 
+      memguts.c    // entirely misnamed, implementations for miapi.h, profile trivia. 
+      CONFIG_NOT_USING_FILES & iPhone_configfiles.c  
+
+
+------ Other TODO items and notes on issues: -------
+
+SSL is broken on simulator...AGAIN!
+
+Color depth uses many enums and constants, many are unused or ignored, see:
+  PN_COLOR_SUPPORT_*, PN_WINDOWCOLOR_*, Color_Cap_??, GCS_PALETTED_?_BIT, GCS_RGB_??BIT, GRAPH_COLORSPACE, ColorSpaceToBitsPerPixel[], GDC_ColorSpaceToPixelFormat(), ColorFormat2GCS[], 
+ 
+gSessionViewController, GetSessionViewController()...probably others too. Normalize this stuff.
+
+The Settings class is costly to init, created frequently, and probably should be a singleton.
+
+SessionViewController, SessionKeyboardManager, and related engine code are 
+  incredibly (and unnecessarily) snarled and patched together.
+
+  
+This call stack:
+
+...[redacted 35 deep thread switch stack]...
+
+
+------------ Types, Functions and Methods to Discard, Unused and Deprecated -----
+
+IBOOL, BOOL // causes constant redef problems, just use bool, or int if oldschool!
+FAR, NEAR, 
+
+[ApplicationDelegate convertFromOldProfiles] // dead?
+
+NotificationManager.h,m  // An unfortunate name, since Notifications are a frequently used 
+ capability of iOS and OSX. Perhaps rename to UserAlertsManager?
+
+
+--------- For Code that is marked as unused by Clang.
+First Stage, turn off with these:
+#if AnyoneNeedsThisDeadCodeTheyShouldSpeakUpBeforeItsRemoved
+/// TODO: <yourname>, marked as dead on <date> remove sometime thereafter
+
+#endif // AnyoneNeedsThisDeadCodeTheyShouldSpeakUpBeforeItsRemoved
+
+ 
+#if AnyoneNeedsThisDeadCodeTheyShouldSpeakUpBeforeItsRemoved
+/// TODO: tarynv, marked as dead on 10/2012 remove sometime thereafter 
+
+#endif // AnyoneNeedsThisDeadCodeTheyShouldSpeakUpBeforeItsRemoved
+
+ 
+----- Files that seem unused but are simply misused, e.g. .c files that are included in other files.
+
+ CAUTION! this file is included in other files ( Also see #if MaximimiseObfuscation )
+
+#include "vdapi.c"  included everywhere, must be a template source 
+#include "wdapi.c"
+#include "wdbuffer.c"
+#include "capable.c"
+#include "wdica.c"
+#include "wdoutput.c"
+#include "wdinput.c"
+#include "wdinit.c"
+#include "virtual.c"
+#include "misc.c"
+#include "mouse.c"
+#include "mode.c"
+#include "platmode.c"
+#include "wdcallup.c"
+#include "chmon.c"
+#include "cookie.c"
+#include "wdcredentials.c"
+
+#include "ctlcapable.c"
+#include "ctlvc.c"
+#include "vdctl.c"
+#include "ctlgvc.c"
+
+#include "vdapi.c"
+#include "vdzl.c"
+#include "zlfcapable.c"
+#include "zlvc.c"
+
+#include "pdapi.c"
+#include "pdbuffer.c"
+#include "pdrframe.c"
+#include "rfcallup.c"
+#include "rfinput.c"
+
+
+#if FileIsNotEntirelyDeprecated
+#endif // FileIsNotEntirelyDeprecated
+
+
+
+------------ Candidate Files to Discard, Under Investigation for Relevance -----
+
+
+smartcards; Maybe not, we may have to use this stuff:
+scasync.c
+scdbqry.c
+sccrdcom.c
+sccrdtrk.c
+scDLLLoad.c ( includes scvd.c )
+scevent.c
+scinit.c
+scrmcxt.c
+scnonstd.c
+scroot.c
+scsndc2h.c
+scutil.c
+
+tuivc,   // just excruciating
+TUICITransformSI, vdtuie, vdcam, sspicl, modmgr, 
+
+debug.h      // only includes propdebug.h, and most files include propdebug.h directly
+
+These three file have same declarations and defines, two are probably surplus:
+keytypes.h    // only used by wdapi.h
+mac_unicode.h //   ''  '' propEngineBridge.h 
+uce.h   //  used in several files which smell obsolete
+
+
+------------ Files to discard, removed from project -----
+
+-------------- Removed from project and P4 -----------------------------
+
+--------- removed from P4 06/10/12 ------------
+
+logmap.h    // entirely replaced with AETRACE
+ctxtimer.h   // dupe of ctxtmr, not included in any file, and no implementation.
+mac_corefoundation_utils.m    // entirely unused
+cmpobject.h // excruciatingly misnamed feet-in-the-door for cpp, entirely unused
+cmpstr.h    // We'll keep the still unused cmp* files that are actual protocol
+cmp.h       // declarations, and just toss the absurd and unimplemented windowisms
+propmsg.h     // not included in any file, and no implementation.
+adpcm_conv.c // "not a member of any target"
+
+
+--------- Removed in P4 217921  ------------
+EngineKbmInterface.h, .mm      // completely replaced by SessionUserActionQueue
+EngineKbmInterfaceImpl.h, .mm  // completely replaced by SessionUserActionQueue
+
+------ removed in P4 202958:
+ memabs.h  // last of memory jump table foolishness
+ pctxmem.h
+ ctxmem.c
+ mac_NCS_main.c  // amazingly, it's entirely unused, but we keep prodding at it :)
+ syncload.c      // pointless without DLLs
+ evtload.c
+ ctxevt.h      // never used
+ ctxevt.c
+ socklist.h    // never used 
+ sslui.c       // never used
+
+------ removed in 188993 by philipwi:
+	PDs: RELI, FRAME, COMP
+	pdloader.c
+	pdcompe.c	pdframee.c
+	pdrelie.c	tdloader.c
+	cocallup.c	coinput.c
+	compress.c	decomp.c
+	pdcomp.c
+	frcallup.c	frcrc16.c
+	frinput.c	pdframe.c
+	pdreli.c	rebuffer.c
+	recallup.c	reinput.c
+	reoutput.c 	retimers.c
+	VD: SCARD
+	scasync.c	scauxil.c
+	sccrdcom.c	scardtrk.c
+	scdbmng.c	scdbqry.c
+	scevent.c	scinit.c
+	scnonstd.c	scrmcxt.c
+	scroot.c	scsndc2h.c
+	scutil.c	scvd.c
+	sccmd.h		scevent.h
+	scroot.h	sctypes.h
+	scutil.h	scvd.h
+	scwire.h
+
+------ removed in 187629:
+	dosspool.c
+	commspool.c
+	mac_autoproxy.c
+	mac_carbon_utils.h
+	mac_DisplayEULA.c
+	mac_DisplayProxyAuthDlog.h
+	mac_DisplayProxyAuthDlog.c
+	mac_NCS_appleEvents.c
+	mac_NCS_AutoReconnect.c
+	mac_NCS_menus.c
+	mac_NCS_status.c
+	mac_NCS_window.c
+	mac_printPS.c
+	MFPrint.c
+	ntspool.c
+	winspool.c
+-------------
+
+------ removed in 187741:
+	ga_obj.c 
+
+------ removed in 187964
+   windows screen printing
+	ctxscrn.h
+	ctxscrn.c
+   handle abstraction:
+	ctxhnd.h
+	ctxhnd.c
+
+------ removed in 188030
+	NCSmain.c
+	NCSbrows.c
+
+------ removed in 188926
+	pathload.c
+
+------ Feb '12
+    HPIC_PAL
+
+------ removed in 201996    
+vpmaine.c // unused 'split main' sillyness
+PAPPMAIN.C
+logapi.c // dead logging, see AETRACE
+logmap.h
+mac_timers.c
+propEngine/base/PlatformIndependent/lib/libjpeg/... // replacing with turbojpeg 
+
+

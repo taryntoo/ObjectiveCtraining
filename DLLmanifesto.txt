@@ -1,0 +1,69 @@
+The DLL Manifesto,   tarynv 8/18/2011
+
+Executive summary:
+All <mumble>_CALL_TABLE functionality is being entirely stripped from the iOS client. It adds nothing, increasing code size and complexity, and decreasing speed, readability, optimizability, and debugability. The functionality will not just be disabled in source, it is being removed.
+
+Justification:
+Our original justifications for re-inventing the DLL are moot for all modern platforms, and many of those platforms explicitly forbid vendor supplied dynamic libraries because of security concerns. 
+
+Emulating DLLs on non-Windows platforms is destructive and counterproductive. Even Microsoft has come to realize that DLLs were probably the largest source of bugs and security flaws in their whole creaking edifice.
+
+The other historically useful feature of DLL-like mechanisms, the use of jump tables to provide run-time binding to functionality, is also irrelevant in modern development environments since that functionality is far better supported by object languages.
+
+
+Targets:
+    SUPPORT_CALL_TABLES
+
+    USE_WND_CALL_TABLE
+    USE_MEM_CALL_TABLE
+    USE_THRD_CALL_TABLE
+    USE_SYNC_CALL_TABLE
+    USE_TMR_CALL_TABLE
+    USE_MEMINI_CALL_TABLE
+    USE_KBD_CALL_TABLE
+    USE_LOG_CALL_TABLE
+    USE_CTXOS_CALL_TABLE
+    USE_BINI_CALL_TABLE
+    USE_VIO_CALL_TABLE
+    USE_MODULE_CALL_TABLE
+    USE_EVT_CALL_TABLE
+    USE_SUBLST_CALL_TABLE
+    USE_FILE_CALL_TABLE
+    USE_PATH_CALL_TABLE
+    USE_FONT_CALL_TABLE
+    USE_SRCC_CALL_TABLE
+    USE_GRAPH_CALL_TABLE
+
+    <mumble>CALLTABLE
+
+
+Relevant Files:
+	<mumble>load.c		// these usually contain CALLTABLE trivia
+
+
+
+Plan:
+
+a) Repair the code so that it will actually build with these macros #undefed. 
+	8/18/2011 PhilipW completed this work, Taryn is integrating.
+
+b) Strip dead code and globals associated with supporting the Mock DLLs
+
+
+// Boilerplate
+
+#if DLLsWereAgoodIdeaPeopleWouldntHateWindows
+#endif // DLLsWereAgoodIdeaPeopleWouldntHateWindows    
+
+
+SHOW("%s is deprecated; put a breakpoint in it to identify and update callers\n", __func__);
+
+ CAUTION! this file is included in other files
+
+#define SUPPORT_CALL_TABLES 1   // Yes, Maximize obfuscation and indirection
+
+#if SecretlyInstantiateAndInitAglobal
+#if JustCutMeWithAbigChunkaWindowGlassTillIbleedOut
+#if MaximimiseObfuscation
+
+
