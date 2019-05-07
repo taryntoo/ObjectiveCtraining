@@ -1,72 +1,6 @@
 Cleanup Candidates.txt
 iOS Receiver Work Items and Files for potential discard,   tarynv 04/2012
 
-The display problem:
-Mostly in ga_macapi.c, I think it boils down to a failure to retain and access the backbuffer's _GDC (see GA_TYPES.H) as needed to update small rects, then re-render them to the sessionview. 
-
-basically, every small rect update to the backbuffer  needs to be queued as a small update to sessionview, instead of forcing sessionview redraws.
-GA_MacAPI_FlushChanges()
-
-theMacGDC->theBitMap
-
-
-from roger:
-
-First off, a note on drawRectsToWindow.  We avoid the costliest operations in this method because, frankly, we short-circuit out before they can occur.  Specifically, the ImageForBitmap and DrawImageIntoContext calls won't happen because we hit Mac_ForceWindowContentsRedraw and then return.
-
-Which leads me to dig into Mac_ForceWindowContentsRedraw.  This gets us to []SessionInputView:redrawScreen:, partially given here:
-
-- (void)redrawScreen:(CGImageRef)theImage 
-{
-    if (theImage==NULL) {
-         __block PBitmapData pBitmapD = NULL;
-
-#if     USE_LIBDISPATCH
-        // sending task off to the GDC handler queue, waiting for return.
-        dispatch_sync(GA_GetScreenGCD_dispatch_queue(), ^{
-           pBitmapD = GA_MacAPI_CreateBitMapDataFromSessionBackBuffer();
-            if (pBitmapD) {
-                [self updateTextureBitmap:pBitmapD];
-                if (self.isDraggingMagnificationLoop) {
-                    [self updateMagnificationLoopCenterPoint:self.mousePointerView.center];
-                }
-                free(pBitmapD);
-            }
-        });
-#else
- ...
-#endif  // USE_LIBDISPATCH
-    }
-}   // ends redrawScreen:
-
-
-The interesting thing is that we always incur the cost of GA_MacAPI_CreateBitMapDataFromSessionBackBuffer in the block.  But do we need it?
-
-Looking at ICASessionEAGLView:updateTextureBitmap:, we get a clue for an optimization:
-- (void)updateTextureBitmap: (PBitmapData) bitmap
-{
-    if (bitmap==nil) return;
-    
-    if ([self useOpenGL])
-    {
-        updateTextureBitmap(bitmap);
-        [self drawView];
-    }
-    else
-    {
-        [self setNeedsDisplay];
-    }
-}
-
-See it?  If we're not in "useOpenGL" mode, we don't use the bitmap.  Which means that for depths other than 24 and 32, the work performed by 
-GA_MacAPI_CreateBitMapDataFromSessionBackBuffer was a waste of time.
-
-So the optimization would be in ICASessionInputView:redrawScreen:.  Basically, we should look to see if we're in "useOpenGL" mode.  If we are, go ahead and call GA_MacAPI_CreateBitMapDataFromSessionBackBuffer, etc etc.  But if we're not, then it should be sufficient to just call [self setNeedsDisplay].
-
-The impact is that we would avoid the costly processing associated with each short-circuited call to drawRectsToWindow, and basically kick the actually drawing downstream to normal "drawRect:" time courtesy of setNeedsDisplay.
-
-Yes, there is the edge case that []SessionEAGLView:updateTextureBitmap: is sensitive to bitmap==nil.  But I don't think that my proposed change would suffer from that, as it is safe to call [self setNeedsDisplay] regardless of the actual availability of the bitmap returned by GA_MacAPI_CreateBitMapDataFromSessionBackBuffer.
-
 ------ Poorly Pirated and/or Warning Loaded files ------
 
 TCPServer.m
@@ -193,6 +127,16 @@ Clean up one of the handful of logging and tracing modules already in
 
 
 ------ Other TODO items and notes on issues: -------
+
+The display problem:
+Mostly in ga_macapi.c, I think it boils down to a failure to retain and access the backbuffer's _GDC (see GA_TYPES.H) as needed to update small rects, then re-render them to the sessionview. 
+
+per Roger: basically, every small rect update to the backbuffer  needs to be queued as a small update to sessionview, instead of forcing sessionview redraws.
+GA_MacAPI_FlushChanges()
+theMacGDC->theBitMap
+The interesting thing is that we always incur the cost of GA_MacAPI_CreateBitMapDataFromSessionBackBuffer in the block.  But do we need it?
+Basically, we should look to see if we're in "useOpenGL" mode.  If we are, go ahead and call GA_MacAPI_CreateBitMapDataFromSessionBackBuffer, etc etc.  But if we're not, then it should be sufficient to just call [self setNeedsDisplay].
+The impact is that we would avoid the costly processing associated with each short-circuited call to drawRectsToWindow, and basically kick the actually drawing downstream to normal "drawRect:" time courtesy of setNeedsDisplay.
 
 SSL is broken on simulator...AGAIN!
 
