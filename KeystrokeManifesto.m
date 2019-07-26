@@ -4,7 +4,8 @@
  Normalize keystroke handling in iOS
 
 !!!: Justification:
-Every keystroke blocks main and engine threads. causes thousands of cycles,  hundreds of decisions and forces the entire screen to redraw at some color depths.
+Every keystroke blocks main and engine threads. causes thousands of cycles, 
+hundreds of decisions and forces the entire screen to redraw at some color depths.
 
 This file is marked as a source file so XCode will generate a symbol menu for it. 
 It is not included in any build target.
