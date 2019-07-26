@@ -1,10 +1,13 @@
 /* ThreadingManifesto.m, the Libdispatch port for iOS client,   tarynv 28/02/2012
 
 !!!: Executive summary:
-All threads, muteness, timers, interlocks, etc. are being normalized under the umbrella of libdispatch, aka Grand Central Dispatch, which provides a highly efficient and unix-portable multitasking model.
+All threads, muteness, timers, interlocks, etc. are being normalized under the 
+umbrella of libdispatch, aka Grand Central Dispatch, which provides a highly 
+efficient and unix-portable multitasking model.
 
 !!!: Justification:
-The iOS client simultaneously uses three generations of Mac threading and locking and a bizarre port of Windows' critical sections and events.
+The iOS client simultaneously uses three generations of Mac threading and 
+locking and a bizarre port of Windows' critical sections and events.
       
 This file is marked as a source file so XCode will generate a symbol menu for it. 
 It is not included in any build target.
