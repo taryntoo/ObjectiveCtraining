@@ -1,21 +1,36 @@
 The Malloc Manifesto,   tarynv 5/24/2011
 
 Executive summary:
-ALL memory allocations in .c and .cpp files of the iOS client shall use the functions named like 'host_malloc', 'host_free', 'host_<mumble>', etc.
+ALL memory allocations in .c and .cpp files of the iOS client shall use 
+the functions named like 'host_malloc', 'host_free', 'host_<mumble>', etc.
 
-These functions use exactly the same semantics as the corresponding stdlib/POSIX/BSD/etc functions, and in most builds will be defined simply as the corresponding stdlib functions.
+These functions use exactly the same semantics as the corresponding 
+stdlib/POSIX/BSD/etc functions, and in most builds will be defined 
+simply as the corresponding stdlib functions.
 
-If the macro MEM_INTERNAL_DEBUGGING is set, these functions will use our (new) home-rolled guard functions, for details see: plat.h and mac_memory.c.
+If the macro MEM_INTERNAL_DEBUGGING is set, these functions will use 
+our (new) home-rolled guard functions, for details see: plat.h and mac_memory.c.
 
-During code cleanup, calls like Mem_alloc() or MemMacAlloc() will be replaced by inlines that emit a warning, but work as expected.
+During code cleanup, calls like Mem_alloc() or MemMacAlloc() will be replaced 
+by inlines that emit a warning, but work as expected.
 
-.m files shall continue to use the memory functions traditional to objective c class instantiation, but may optionally use host_<mumble> memory for non-object allocations. 
+.m files shall continue to use the memory functions traditional to 
+objective c class instantiation, but may optionally use host_<mumble> 
+memory for non-object allocations. 
 
-As these variants are being normalized, the original calls are being left in situ, but commented or defined away. After testing, a final pass should be made to strip all the clutter and deprecated code out. 
+As these variants are being normalized, the original calls are being left in situ, 
+but commented or defined away. After testing, a final pass should be made to 
+strip all the clutter and deprecated code out. 
 
 Justification:
-Our home grown memory management simply doesn't work right on the ARM. I'm not finished counting yet but have already found nine different ways to call, redirect, or redefine malloc() and its brethren, many with peculiar arguments and pointless tests. 
-Our home grown pools were never implemented for OSX and iOS, but their interfaces are being used, causing a huge waste of cycles. Many structures cause alignment issues, but are too small to be captured by the libgmalloc library, forcing us to repair and use our home-grown guardmalloc.
+Our home grown memory management simply doesn't work right on the ARM. 
+I'm not finished counting yet but have already found nine different ways 
+to call, redirect, or redefine malloc() and its brethren, many with peculiar 
+arguments and pointless tests. 
+Our home grown pools were never implemented for OSX and iOS, but their interfaces 
+are being used, causing a huge waste of cycles. Many structures cause alignment 
+issues, but are too small to be captured by the libgmalloc library, forcing us 
+to repair and use our home-grown guardmalloc.
 
 
 Details:
@@ -25,7 +40,7 @@ plat.h:	Fully revised, provides macros or declarations for all the
 	usual memory suspects based on the state of MEM_INTERNAL_DEBUGGING, 
 	macros for jump tables and many type declarations.
    #define host_malloc(a) 	 malloc(a)  
-or…
+or√â
    #define host_malloc(a)   host_debug_malloc(a)
 
 
@@ -38,7 +53,11 @@ memabs.h 	Deleted
     DEPRECATED	UINT (*MEMALLOCFUNC)(HND, ULONG, PVOID *)  
 				UINT (*MEMFREEFUNC)(HND, PVOID)
 
-Defines the MEMPOOLDATA jump tables and corresponding jump functions. Included in 9 files, most users of the tables do so through the pretty names from ctxmem.h Since it's just a cycle waster, we've never implemented pools, and using a DLL for a system standard abstraction like malloc() is suicidally perverse, this is fully deprecated.
+Defines the MEMPOOLDATA jump tables and corresponding jump functions. 
+Included in 9 files, most users of the tables do so through the pretty 
+names from ctxmem.h Since it's just a cycle waster, we've never implemented 
+pools, and using a DLL for a system standard abstraction like malloc() is 
+suicidally perverse, this is fully deprecated.
 
 pctxmem.h:  Deleted 
 
@@ -46,18 +65,23 @@ pctxmem.h:  Deleted
 ctxmem.c:   Deleted 
 ctxmem.h:   Fully revised 	UINT Mem_alloc(HND poolId, ULONG size, PVOID *ppBuffer) 
 				UINT Mem_free(HND poolId, PVOID pBuffer);
-Calls to the Mem_<mumble> variants no longer examine and jump through either g_GlobalPool or g_IoPool, now calling the host_<mumble> variants directly and cobbling up a status return for the callers.) 
+Calls to the Mem_<mumble> variants no longer examine and jump through 
+either g_GlobalPool or g_IoPool, now calling the host_<mumble> variants 
+directly and cobbling up a status return for the callers.) 
 
-Declare the memory jump tables g_GlobalPool & g_IoPool as defined in memabs.h and provides 
-pretty names like Mem_realloc(), Mem_free() for the table entries. These have a pool and return(**) parameter and return UINT errors like MEM_SUCCESS (0)
-and MEM_FAILURE (1).
+Declare the memory jump tables g_GlobalPool & g_IoPool as defined in 
+memabs.h and provides pretty names like Mem_realloc(), Mem_free() 
+for the table entries. These have a pool and return(**) parameter 
+and return UINT errors like MEM_SUCCESS (0) and MEM_FAILURE (1).
 
 The stubs for MEM_GLOBAL_POOL and MEM_IO_POOL pools are rubbish, 
 completely unimplemented except as a cycle waster. If we do choose to 
 implement pool support for the client, search for malloc_create_zone() 
 and malloc_zone_malloc() in the iOS man pages.
 
-Since the returned UINTs for memory failures are generally ignored, the tables are cycle wasters, we've never implemented pools, and using a DLL for it is silly, it's fully deprecated and will be removed post-haste.
+Since the returned UINTs for memory failures are generally ignored, the 
+tables are cycle wasters, we've never implemented pools, and using a DLL 
+for it is silly, it's fully deprecated and will be removed post-haste.
 
 
 -----------
@@ -85,13 +109,14 @@ NCSmemman.c 	deleted		void * HostMalloc(IUM32 size, FailAction failAction)
 memman.h	revised		void   HostFree(void *p)
 (fixed P4 185840 Removed NCSmemman from project, created host_malloc_or_die & host_realloc_or_die in memman.h.)
 
-Provides a way to force exit on malloc failure, Only a few dozen users of this layer, moved entire functionality into memman.h HostMalloc() will become host_malloc_or_die
+Provides a way to force exit on malloc failure, Only a few dozen users of this layer, 
+moved entire functionality into memman.h HostMalloc() will become host_malloc_or_die
 
 
 ------------
 cpm_spool.h	revised		#define LocalAlloc(type,size)	HostMalloc(size,FailFatal)
 				#define LocalFree(ptr)    	HostFree(ptr)
-And yet ANOTHER indirection layer to UINT Mem_alloc() variants of allocation….sigh…
+And yet ANOTHER indirection layer to UINT Mem_alloc() variants of allocation√â.sigh√â
 fully revised, removing memory management.
 
 ------------
@@ -111,18 +136,18 @@ Wrappers to make Mem_allocs look like malloc. replaced all with host_<mumble cal
 -----------
 tw2cache.c 	fully revised		LPUINT8 TW2CacheAlloc(UINT32 length)
 					LPUINT8 TW2CacheAllocAndClear(UINT32 length)
-Excruciatingly silly local variants of malloc and calloc … sigh… 
+Excruciatingly silly local variants of malloc and calloc √â sigh√â 
 
 
 ---------
 scutil.c,h  	deleted	PVOID SCVD_AllocMem(IN UINT32);
 			PVOID SCVD_AllocAndZeroMem(IN UINT32);
 			INT SCVD_FreeMem(IN PVOID);
-sigh… The hits keep coming...
+sigh√â The hits keep coming...
 
 ga_obj.h,c 	replaced with inlines:  OSStatus NewPaletteObject(PHGPALETTE ppChunk);
 					OSStatus NewBitMapObject (PHGBITMAP ppChunk)
-					… and many similar
+					√â and many similar
 
 miapi.h      // miGetPrivateProfile...(), etc. 
 memguts.c    // here for completeness only, entirely misnamed, profile trivia. 
@@ -142,10 +167,11 @@ see main() in main.m
 size_t	 strlcpy(char *, const char *, size_t);
 
 
-memcpy vs host_memcpy… Do we need a host_memcpy for anything? (besides sidestepping our P4 replace-intelligent-programming-with-ritual-obsequity filter.)
+memcpy vs host_memcpy√â Do we need a host_memcpy for anything? 
+(besides sidestepping our P4 replace-intelligent-programming-with-ritual-obsequity filter.)
 
 
-Replace:	if(Mem_alloc(… {
+Replace:	if(Mem_alloc(√â {
 with:		if(! ( = host_malloc() ) ) {
 
 			return MEM_NO_MEMORY;
@@ -154,7 +180,7 @@ with:		if(! ( = host_malloc() ) ) {
 
                 host_calloc(size_t count, size_t size);
 
-Replace:	if (Mem_allocZeroed(MEM_GLOBAL_POOL…
+Replace:	if (Mem_allocZeroed(MEM_GLOBAL_POOL√â
 with:		if(! ( = host_calloc(1, ) ) ) {
 
 
